@@ -1,0 +1,146 @@
+
+> eternal-care-backend@0.1.0 dev
+> ts-node-dev --respawn --transpile-only src/index.ts
+
+[INFO] 05:43:18 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+DB connection failed after retries getaddrinfo ENOTFOUND db.wklffoowvcyofvydjfim.supabase.co
+DB not available — running in fallback mode (file store).
+Eternal Care backend listening on port 4000
+[INFO] 06:01:54 Restarting: /Users/mac/Documents/GitHub/Eternal-Care-Backend/src/routes/bookings.ts has been modified
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+DB connection failed after retries getaddrinfo ENOTFOUND db.wklffoowvcyofvydjfim.supabase.co
+DB not available — running in fallback mode (file store).
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at node:net:2206:7
+    at processTicksAndRejections (node:internal/process/task_queues:89:21)
+[ERROR] 06:02:07 Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+[INFO] 06:11:01 Restarting: /Users/mac/Documents/GitHub/Eternal-Care-Backend/src/supabase.ts has been modified
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+DB connection failed after retries getaddrinfo ENOTFOUND db.wklffoowvcyofvydjfim.supabase.co
+DB not available — running in fallback mode (file store).
+Error: listen EADDRINUSE: address already in[INFO] 06:11:25 Restarting: /Users/mac/Documents/GitHub/Eternal-Care-Backend/src/supabase.ts has been modified
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+DB connection failed after retries getaddrinfo ENOTFOUND db.wklffoowvcyofvydjfim.supabase.co
+DB not available — running in fallback mode (file store).
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInClusterDB connection failed after retries getaddrinfo ENOTFOUND db.wklffoowvcyofvydjfim.supabase.co
+DB not available — running in fallback mode (file store).
+Error: listen EADDRINUSE: address already in[INFO] 06:12:05 Restarting: /Users/mac/Documents/GitHub/Eternal-Care-Backend/src/routes/auth.ts has been modified
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+DB connection failed after retries getaddrinfo ENOTFOUND db.wklffoowvcyofvydjfim.supabase.co
+DB not available — running in fallback mode (file store).
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at node:net:2206:7
+    at processTicksAndRejections (node:internal/process/task_queues:89:21)
+[ERROR] 06:12:11 Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+[INFO] 06:12:23 Restarting: /Users/mac/Documents/GitHub/Eternal-Care-Backend/src/routes/auth.ts has been modified
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+DB connection failed after retries getaddrinfo ENOTFOUND db.wklffoowvcyofvydjfim.supabase.co
+DB not available — running in fallback mode (file store).
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at node:net:2206:7
+    at processTicksAndRejections (node:internal/process/task_queues:89:21)
+[ERROR] 06:12:29 Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+[INFO] 06:12:45 Restarting: /Users/mac/Documents/GitHub/Eternal-Care-Backend/src/routes/auth.ts has been modified
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+DB connection failed after retries getaddrinfo ENOTFOUND db.wklffoowvcyofvydjfim.supabase.co
+DB not available — running in fallback mode (file store).
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at node:net:2206:7
+    at processTicksAndRejections (node:internal/process/task_queues:89:21)
+[ERROR] 06:12:53 Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+[INFO] 06:13:17 Restarting: /Users/mac/Documents/GitHub/Eternal-Care-Backend/src/supabase.ts has been modified
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+DB connection failed after retries getaddrinfo ENOTFOUND db.wklffoowvcyofvydjfim.supabase.co
+DB not available — running in fallback mode (file store).
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at node:net:2206:7
+    at processTicksAndRejections (node:internal/process/task_queues:89:21)
+[ERROR] 06:13:25 Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+[INFO] 06:13:26 Restarting: /Users/mac/Documents/GitHub/Eternal-Care-Backend/src/supabase.ts has been modified
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+DB connection failed after retries getaddrinfo ENOTFOUND db.wklffoowvcyofvydjfim.supabase.co
+DB not available — running in fallback mode (file store).
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at node:net:2206:7
+    at processTicksAndRejections (node:internal/process/task_queues:89:21)
+[ERROR] 06:13:34 Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+[INFO] 06:13:58 Restarting: /Users/mac/Documents/GitHub/Eternal-Care-Backend/src/supabase.ts has been modified
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+DB connection failed after retries getaddrinfo ENOTFOUND db.wklffoowvcyofvydjfim.supabase.co
+DB not available — running in fallback mode (file store).
+Error: listen EADDRINUSE: address already in[INFO] 06:19:47 Restarting: /Users/mac/Documents/GitHub/Eternal-Care-Backend/src/supabase.ts has been modified
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+DB connection failed after retries getaddrinfo ENOTFOUND db.wklffoowvcyofvydjfim.supabase.co
+DB not available — running in fallback mode (file store).
+Eternal Care backend listening on port 4000
+[INFO] 06:19:58 Restarting: /Users/mac/Documents/GitHub/Eternal-Care-Backend/src/routes/bookings.ts has been modified
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+DB connection failed after retries getaddrinfo ENOTFOUND db.wklffoowvcyofvydjfim.supabase.co
+DB not available — running in fallback mode (file store).
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at node:net:2206:7
+    at processTicksAndRejections (node:internal/process/task_queues:89:21)
+[ERROR] 06:20:05 Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+[INFO] 06:20:13 Restarting: /Users/mac/Documents/GitHub/Eternal-Care-Backend/src/routes/bookings.ts has been modified
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+The timeout option is deprecated, use idle_timeout instead
+DB connection failed after retries getaddrinfo ENOTFOUND db.wklffoowvcyofvydjfim.supabase.co
+DB not available — running in fallback mode (file store).
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at node:net:2206:7
+    at processTicksAndRejections (node:internal/process/task_queues:89:21)
+[ERROR] 06:20:20 Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+ use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInClusterDB connection failed after retries getaddrinfo ENOTFOUND db.wklffoowvcyofvydjfim.supabase.co
+DB not available — running in fallback mode (file store).
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at node:net:2206:7
+    at processTicksAndRejections (node:internal/process/task_queues:89:21)
+[ERROR] 06:20:20 Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
