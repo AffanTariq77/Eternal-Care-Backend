@@ -1,31 +1,45 @@
-import axios from 'axios';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import ws from 'ws';
 
-function headers() {
-  const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE;
-  return {
-    apikey: SUPABASE_KEY,
-    Authorization: `Bearer ${SUPABASE_KEY}`,
-    'Content-Type': 'application/json',
-  };
+// Node.js 20 lacks native WebSocket — polyfill before Supabase Realtime initialises
+if (typeof (globalThis as any).WebSocket === 'undefined') {
+  (globalThis as any).WebSocket = ws;
+}
+
+let _client: SupabaseClient | null = null;
+
+// Read lazily so dotenv.config() in index.ts has time to run first
+function getUrl() {
+  return process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+}
+
+function getKey() {
+  // Prefer service role key (bypasses RLS); fall back to publishable/anon key
+  return process.env.SUPABASE_SERVICE_ROLE || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '';
+}
+
+function getClient(): SupabaseClient {
+  if (!_client) {
+    _client = createClient(getUrl(), getKey(), {
+      auth: { persistSession: false },
+    });
+  }
+  return _client;
 }
 
 export function isSupabaseConfigured() {
-  return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE);
+  return Boolean(getUrl() && getKey());
 }
 
 export async function getUserByEmail(email: string) {
-  const SUPABASE_URL = process.env.SUPABASE_URL as string;
-  const url = `${SUPABASE_URL}/rest/v1/users`;
-  const resp = await axios.get(url, { headers: headers(), params: { select: '*', email: `eq.${email}` } });
-  return resp.data && resp.data[0];
+  const { data } = await getClient().from('users').select('*').eq('email', email).single();
+  return data;
 }
 
 export async function createUser(user: { id: string; name: string; email: string; password_hash: string }) {
-  const SUPABASE_URL = process.env.SUPABASE_URL as string;
-  const url = `${SUPABASE_URL}/rest/v1/users`;
-  const resp = await axios.post(url, user, { headers: { ...headers(), Prefer: 'return=representation' }, validateStatus: () => true });
-  if (resp.data && resp.data[0]) return resp.data[0];
-  // fallback: retry fetching by email a few times (PostgREST sometimes returns empty body then the row is visible)
+  const { data } = await getClient().from('users').insert(user).select().single();
+  if (data) return data;
+  // Retry fetch — PostgREST may return empty on first insert
   for (let i = 0; i < 5; i++) {
     const u = await getUserByEmail(user.email);
     if (u) return u;
@@ -35,11 +49,8 @@ export async function createUser(user: { id: string; name: string; email: string
 }
 
 export async function createBooking(booking: any) {
-  const SUPABASE_URL = process.env.SUPABASE_URL as string;
-  const url = `${SUPABASE_URL}/rest/v1/bookings`;
-  const resp = await axios.post(url, booking, { headers: { ...headers(), Prefer: 'return=representation' }, validateStatus: () => true });
-  if (resp.data && resp.data[0]) return resp.data[0];
-  // fallback: retry fetching by id a few times
+  const { data } = await getClient().from('bookings').insert(booking).select().single();
+  if (data) return data;
   if (booking.id) {
     for (let i = 0; i < 5; i++) {
       const row = await getBookingById(booking.id);
@@ -51,64 +62,46 @@ export async function createBooking(booking: any) {
 }
 
 export async function getBookings(userId?: string) {
-  const SUPABASE_URL = process.env.SUPABASE_URL as string;
-  const url = `${SUPABASE_URL}/rest/v1/bookings`;
-  const params: any = { select: '*' };
-  if (userId) params['user_id'] = `eq.${userId}`;
-  const resp = await axios.get(url, { headers: headers(), params });
-  return resp.data;
+  let query = getClient().from('bookings').select('*');
+  if (userId) query = query.eq('user_id', userId);
+  const { data } = await query;
+  return data ?? [];
 }
 
 export async function getBookingById(id: string) {
-  const SUPABASE_URL = process.env.SUPABASE_URL as string;
-  const url = `${SUPABASE_URL}/rest/v1/bookings`;
-  const resp = await axios.get(url, { headers: headers(), params: { select: '*', id: `eq.${id}` } });
-  return resp.data && resp.data[0];
+  const { data } = await getClient().from('bookings').select('*').eq('id', id).single();
+  return data;
 }
 
 export async function getProfile(userId: string) {
-  const SUPABASE_URL = process.env.SUPABASE_URL as string;
-  const url = `${SUPABASE_URL}/rest/v1/users`;
-  const resp = await axios.get(url, { headers: headers(), params: { select: '*', id: `eq.${userId}` } });
-  return resp.data && resp.data[0];
+  const { data } = await getClient().from('users').select('*').eq('id', userId).single();
+  return data;
 }
 
 export async function updateProfile(userId: string, patch: any) {
-  const SUPABASE_URL = process.env.SUPABASE_URL as string;
-  const url = `${SUPABASE_URL}/rest/v1/users`;
-  const resp = await axios.patch(url, patch, { headers: { ...headers(), Prefer: 'return=representation' }, params: { id: `eq.${userId}` } });
-  return resp.data && resp.data[0];
-}
-export async function getUserTokens(userId: string) {
-  const SUPABASE_URL = process.env.SUPABASE_URL as string;
-  const url = `${SUPABASE_URL}/rest/v1/users`;
-  const resp = await axios.get(url, { headers: headers(), params: { select: 'id,expo_tokens', id: `eq.${userId}` } });
-  const row = resp.data && resp.data[0];
-  return (row && row.expo_tokens) || [];
+  const { data } = await getClient().from('users').update(patch).eq('id', userId).select().single();
+  return data;
 }
 
-// Create a payment record in Supabase
+export async function getUserTokens(userId: string) {
+  const { data } = await getClient().from('users').select('id, expo_tokens').eq('id', userId).single();
+  return (data && data.expo_tokens) || [];
+}
+
 export async function createPayment(payment: any) {
-  const SUPABASE_URL = process.env.SUPABASE_URL as string;
-  const url = `${SUPABASE_URL}/rest/v1/payments`;
-  const resp = await axios.post(url, payment, { headers: { ...headers(), Prefer: 'return=representation' }, validateStatus: () => true });
-  if (resp.data && resp.data[0]) return resp.data[0];
-  return null;
+  const { data } = await getClient().from('payments').insert(payment).select().single();
+  return data;
 }
 
 export async function updateBooking(id: string, patch: any) {
-  const SUPABASE_URL = process.env.SUPABASE_URL as string;
-  const url = `${SUPABASE_URL}/rest/v1/bookings`;
-  const resp = await axios.patch(url, patch, { headers: { ...headers(), Prefer: 'return=representation' }, params: { id: `eq.${id}` } });
-  return resp.data && resp.data[0];
+  const { data } = await getClient().from('bookings').update(patch).eq('id', id).select().single();
+  return data;
 }
 
 export async function addPushToken(userId: string, token: string) {
   const tokens = await getUserTokens(userId);
   if (tokens.includes(token)) return { added: false, tokens };
   const newTokens = [...tokens, token];
-  const SUPABASE_URL = process.env.SUPABASE_URL as string;
-  const url = `${SUPABASE_URL}/rest/v1/users`;
-  const resp = await axios.patch(url, { expo_tokens: newTokens }, { headers: { ...headers(), Prefer: 'return=representation' }, params: { id: `eq.${userId}` } });
-  return { added: true, tokens: resp.data && resp.data[0] && resp.data[0].expo_tokens ? resp.data[0].expo_tokens : newTokens };
+  const { data } = await getClient().from('users').update({ expo_tokens: newTokens }).eq('id', userId).select().single();
+  return { added: true, tokens: (data && data.expo_tokens) || newTokens };
 }

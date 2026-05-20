@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getSql, isDBConnected } from '../db';
 import { readData, writeData } from '../store';
-import { isSupabaseConfigured, getUserByEmail, createUser } from '../supabase';
+import { isSupabaseConfigured, getUserByEmail, createUser, addPushToken, getUserTokens } from '../supabase';
 import { shouldUseSupabase, isFileFallbackDisabled } from '../dbAdapter';
 import { id } from '../utils/id';
 import bcrypt from 'bcryptjs';
@@ -14,26 +14,29 @@ router.post('/signup', async (req, res) => {
   if (!email || !password) return res.status(400).json({ error: 'email & password required' });
   // prefer Supabase (configurable) then Postgres then file fallback
   if (await shouldUseSupabase()) {
-    const existing = await getUserByEmail(email);
-    if (existing) return res.status(409).json({ error: 'Email already exists' });
-    const uid = id();
-    const hash = bcrypt.hashSync(password, 10);
-    const row = await createUser({ id: uid, name: name || '', email, password_hash: hash });
-    if (!row) return res.status(500).json({ error: 'Failed to create user in Supabase' });
-    const token = jwt.sign({ userId: uid }, process.env.JWT_SECRET || 'change-me', { expiresIn: '7d' });
-    // register push token if provided
-    if (expoPushToken) {
-      try {
-        const { added } = await addPushToken(uid, expoPushToken as string) as any;
-        if (added) {
-          // send welcome to new device
-          await import('../notifications').then((m) => m.sendExpoPush(expoPushToken as string, 'Welcome', 'Your account was created and signed in.'));
+    try {
+      const existing = await getUserByEmail(email);
+      if (existing) return res.status(409).json({ error: 'Email already exists' });
+      const uid = id();
+      const hash = bcrypt.hashSync(password, 10);
+      const row = await createUser({ id: uid, name: name || '', email, password_hash: hash });
+      if (!row) return res.status(500).json({ error: 'Failed to create user in Supabase' });
+      const token = jwt.sign({ userId: uid }, process.env.JWT_SECRET || 'change-me', { expiresIn: '7d' });
+      if (expoPushToken) {
+        try {
+          const { added } = await addPushToken(uid, expoPushToken as string) as any;
+          if (added) {
+            await import('../notifications').then((m) => m.sendExpoPush(expoPushToken as string, 'Welcome', 'Your account was created and signed in.'));
+          }
+        } catch (e) {
+          console.warn('Failed to register push token', e);
         }
-      } catch (e) {
-        console.warn('Failed to register push token', e);
       }
+      return res.json({ user: { id: uid, name: name || '', email }, token });
+    } catch (e: any) {
+      console.error('Supabase signup error:', e?.message || e);
+      return res.status(500).json({ error: e?.message || 'Signup failed. Check that the users table exists in Supabase.' });
     }
-    return res.json({ user: { id: uid, name: name || '', email }, token });
   }
 
   if (isDBConnected()) {
@@ -68,33 +71,36 @@ router.post('/login', async (req, res) => {
   if (!email || !password) return res.status(400).json({ error: 'email & password required' });
   // prefer Supabase then Postgres then file fallback
   if (await shouldUseSupabase()) {
-    const user = await getUserByEmail(email);
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
-    const ok = bcrypt.compareSync(password, user.password_hash as string);
-    if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET || 'change-me', { expiresIn: '7d' });
+    try {
+      const user = await getUserByEmail(email);
+      if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+      const ok = bcrypt.compareSync(password, user.password_hash as string);
+      if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+      const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET || 'change-me', { expiresIn: '7d' });
 
-    const expoPushToken = req.body?.expoPushToken;
-    if (expoPushToken) {
-      try {
-        const tokensBefore = await getUserTokens(user.id);
-        const { added } = await addPushToken(user.id, expoPushToken as string) as any;
-        if (added) {
-          // notify existing tokens about new device login
-          const existing = tokensBefore || [];
-          const others = existing.filter((t: string) => t !== expoPushToken);
-          if (others && others.length) {
-            await import('../notifications').then((m) => m.sendMany(others, 'Security notice', 'Your account was signed in from a new device')); 
+      const expoPushToken = req.body?.expoPushToken;
+      if (expoPushToken) {
+        try {
+          const tokensBefore = await getUserTokens(user.id);
+          const { added } = await addPushToken(user.id, expoPushToken as string) as any;
+          if (added) {
+            const existing = tokensBefore || [];
+            const others = existing.filter((t: string) => t !== expoPushToken);
+            if (others && others.length) {
+              await import('../notifications').then((m) => m.sendMany(others, 'Security notice', 'Your account was signed in from a new device'));
+            }
+            await import('../notifications').then((m) => m.sendExpoPush(expoPushToken as string, 'Signed in', 'You are signed in on this device'));
           }
-          // send confirmation to the new device
-          await import('../notifications').then((m) => m.sendExpoPush(expoPushToken as string, 'Signed in', 'You are signed in on this device'));
+        } catch (e) {
+          console.warn('push token registration failed', e);
         }
-      } catch (e) {
-        console.warn('push token registration failed', e);
       }
-    }
 
-    return res.json({ user: { id: user.id, name: user.name, email: user.email }, token });
+      return res.json({ user: { id: user.id, name: user.name, email: user.email }, token });
+    } catch (e: any) {
+      console.error('Supabase login error:', e?.message || e);
+      return res.status(500).json({ error: e?.message || 'Login failed. Check that the users table exists in Supabase.' });
+    }
   }
 
   if (isDBConnected()) {

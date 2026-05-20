@@ -1,14 +1,15 @@
+// Side-effect import: registers dotenv before any other module reads process.env
+import 'dotenv/config';
+
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import health from './routes/health';
 import auth from './routes/auth';
 import bookings from './routes/bookings';
 import profile from './routes/profile';
 import admin from './routes/admin';
 import { initDB } from './db';
-
-dotenv.config();
+import { isSupabaseConfigured } from './supabase';
 
 const app = express();
 app.use(cors());
@@ -23,14 +24,20 @@ app.use('/admin', admin);
 const PORT = process.env.PORT || 4000;
 
 (async () => {
-  const ok = await initDB();
-  if (ok) {
-    console.log('Database initialized and ready');
+  if (process.env.FORCE_SUPABASE_REST === '1' && isSupabaseConfigured()) {
+    console.log('[DB] Using Supabase REST adapter.');
   } else {
-    console.warn('DB not available — running in fallback mode (file store).');
+    const ok = await initDB();
+    if (ok) {
+      console.log('[DB] Postgres connected and ready.');
+    } else if (isSupabaseConfigured()) {
+      console.log('[DB] Postgres unavailable. Using Supabase REST adapter.');
+    } else {
+      console.warn('[DB] No database available — falling back to file store.');
+    }
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  app.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`Eternal Care backend listening on port ${PORT}`);
   });
 })();
