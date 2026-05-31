@@ -1,54 +1,211 @@
 import { Router } from 'express';
-import { isDBConnected, getLastDBError, getSql, initDB } from '../db';
-import { shouldUseSupabase } from '../dbAdapter';
+import jwt from 'jsonwebtoken';
+import { id } from '../utils/id';
+import { getJwtSecret } from '../middleware/auth';
+import {
+  listGraveyards, getGraveyardById, createGraveyard, updateGraveyard, deleteGraveyard,
+  listPlots, getPlotById, createPlot, updatePlot, deletePlot, countAvailablePlots,
+  listProviders, getProviderById, createProvider, updateProvider, deleteProvider,
+  getBookings, getBookingById, updateBooking, deleteBooking,
+  countTodayBookings, countPendingBookings, revenueThisMonth,
+  listDeceased, getDeceasedById, createDeceased, updateDeceased, deleteDeceased,
+  listUsers, getUserTokens, saveNotification,
+} from '../supabase';
+
 const router = Router();
 
-const ADMIN_KEY = process.env.ADMIN_KEY || 'dev-admin-key';
-
-function requireKey(req: any, res: any, next: any) {
-  const key = req.query.key || req.headers['x-admin-key'];
-  if (key !== ADMIN_KEY) return res.status(401).json({ error: 'Unauthorized' });
-  next();
+function requireAdmin(req: any, res: any, next: any) {
+  const h = req.headers.authorization;
+  if (!h || !h.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const payload = jwt.verify(h.slice(7), getJwtSecret()) as any;
+    if (payload.role !== 'admin') return res.status(403).json({ error: 'Admin access only' });
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
 }
 
-// GET /admin/db - returns DB status and lists tables when connected
-router.get('/db', requireKey, async (_req, res) => {
-  const dbAvailable = isDBConnected();
-  const dbError = getLastDBError();
-  if (!dbAvailable) return res.json({ db: 'unavailable', dbError: dbError ?? null });
+// ─── Dashboard stats ─────────────────────────────────────────────────────────
+router.get('/stats', requireAdmin, async (_req, res) => {
   try {
-    const sql = getSql();
-    const tables = await sql`select table_name from information_schema.tables where table_schema='public' and table_type='BASE TABLE'`;
-    return res.json({ db: 'connected', tables, dbError: null });
-  } catch (err: any) {
-    return res.status(500).json({ error: err?.message || String(err) });
+    const [bookingsToday, pendingApprovals, availablePlots, revenue] = await Promise.all([
+      countTodayBookings(),
+      countPendingBookings(),
+      countAvailablePlots(),
+      revenueThisMonth(),
+    ]);
+    return res.json({ bookingsToday, pendingApprovals, availablePlots, revenue });
+  } catch (e: any) {
+    return res.status(500).json({ error: e?.message || 'Failed to fetch stats' });
   }
 });
 
-// POST /admin/migrate - force running migrations (initDB)
-router.post('/migrate', requireKey, async (_req, res) => {
-  try {
-    const ok = await initDB();
-    if (!ok) return res.status(500).json({ ok: false, message: 'DB not available' });
-    const sql = getSql();
-    const tables = await sql`select table_name from information_schema.tables where table_schema='public' and table_type='BASE TABLE'`;
-    return res.json({ ok: true, tables });
-  } catch (err: any) {
-    return res.status(500).json({ ok: false, error: err?.message || String(err) });
-  }
+// ─── Graveyards ───────────────────────────────────────────────────────────────
+router.get('/graveyards', requireAdmin, async (_req, res) => {
+  try { return res.json(await listGraveyards()); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
 });
 
-// quick check whether Supabase REST is configured in this process
-router.get('/supaconfig', requireKey, (_req, res) => {
+router.get('/graveyards/:id', requireAdmin, async (req, res) => {
   try {
-    const ok = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE);
-    const force = process.env.FORCE_SUPABASE_REST === '1';
-    const disableFallback = process.env.DISABLE_FILE_FALLBACK === '1';
-    const useSupabase = shouldUseSupabase();
-    return res.json({ supabaseConfigured: ok, forceSupabaseRest: force, fileFallbackDisabled: disableFallback, useSupabase });
-  } catch (err: any) {
-    return res.status(500).json({ ok: false, error: err?.message || String(err) });
-  }
+    const g = await getGraveyardById(req.params.id);
+    if (!g) return res.status(404).json({ error: 'Not found' });
+    return res.json(g);
+  } catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.post('/graveyards', requireAdmin, async (req, res) => {
+  try { return res.status(201).json(await createGraveyard({ id: id(), ...req.body })); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.put('/graveyards/:id', requireAdmin, async (req, res) => {
+  try { return res.json(await updateGraveyard(req.params.id, req.body)); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.delete('/graveyards/:id', requireAdmin, async (req, res) => {
+  try { await deleteGraveyard(req.params.id); return res.json({ ok: true }); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+// ─── Plots ────────────────────────────────────────────────────────────────────
+router.get('/plots', requireAdmin, async (req, res) => {
+  try { return res.json(await listPlots(req.query.graveyard_id as string | undefined)); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.get('/plots/:id', requireAdmin, async (req, res) => {
+  try {
+    const p = await getPlotById(req.params.id);
+    if (!p) return res.status(404).json({ error: 'Not found' });
+    return res.json(p);
+  } catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.post('/plots', requireAdmin, async (req, res) => {
+  try { return res.status(201).json(await createPlot({ id: id(), ...req.body })); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.put('/plots/:id', requireAdmin, async (req, res) => {
+  try { return res.json(await updatePlot(req.params.id, req.body)); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.delete('/plots/:id', requireAdmin, async (req, res) => {
+  try { await deletePlot(req.params.id); return res.json({ ok: true }); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+// ─── Service Providers ────────────────────────────────────────────────────────
+router.get('/providers', requireAdmin, async (req, res) => {
+  try { return res.json(await listProviders(req.query.type as string | undefined)); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.get('/providers/:id', requireAdmin, async (req, res) => {
+  try {
+    const p = await getProviderById(req.params.id);
+    if (!p) return res.status(404).json({ error: 'Not found' });
+    return res.json(p);
+  } catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.post('/providers', requireAdmin, async (req, res) => {
+  try { return res.status(201).json(await createProvider({ id: id(), ...req.body })); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.put('/providers/:id', requireAdmin, async (req, res) => {
+  try { return res.json(await updateProvider(req.params.id, req.body)); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.delete('/providers/:id', requireAdmin, async (req, res) => {
+  try { await deleteProvider(req.params.id); return res.json({ ok: true }); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+// ─── Bookings ─────────────────────────────────────────────────────────────────
+router.get('/bookings', requireAdmin, async (_req, res) => {
+  try { return res.json(await getBookings()); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.get('/bookings/:id', requireAdmin, async (req, res) => {
+  try {
+    const b = await getBookingById(req.params.id);
+    if (!b) return res.status(404).json({ error: 'Not found' });
+    return res.json(b);
+  } catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.put('/bookings/:id', requireAdmin, async (req, res) => {
+  try {
+    const existing = await getBookingById(req.params.id);
+    const updated = await updateBooking(req.params.id, req.body);
+    const newStatus: string | undefined = req.body.status;
+    if (newStatus && existing && newStatus !== existing.status) {
+      const userId: string = existing.user_id;
+      const MESSAGES: Record<string, { title: string; body: string; type: string }> = {
+        confirmed: { title: 'Booking confirmed', body: 'Your booking has been approved and confirmed.', type: 'booking_confirmed' },
+        completed: { title: 'Service completed', body: 'Your booking has been marked as completed.', type: 'booking_completed' },
+        cancelled: { title: 'Booking cancelled', body: 'Your booking has been cancelled by the administrator.', type: 'booking_cancelled' },
+        pending:   { title: 'Booking pending', body: 'Your booking is now pending review.', type: 'booking_pending' },
+      };
+      const msg = MESSAGES[newStatus];
+      if (msg) {
+        try { await saveNotification(userId, msg.title, msg.body, msg.type, req.params.id); } catch { /* non-critical */ }
+        try {
+          const tokens = await getUserTokens(userId);
+          if (tokens?.length) await import('../notifications').then((m) => m.sendMany(tokens, msg.title, msg.body));
+        } catch { /* non-critical */ }
+      }
+    }
+    return res.json(updated);
+  } catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.delete('/bookings/:id', requireAdmin, async (req, res) => {
+  try { await deleteBooking(req.params.id); return res.json({ ok: true }); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+// ─── Deceased Records ─────────────────────────────────────────────────────────
+router.get('/deceased', requireAdmin, async (req, res) => {
+  try { return res.json(await listDeceased(req.query.search as string | undefined)); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.get('/deceased/:id', requireAdmin, async (req, res) => {
+  try {
+    const d = await getDeceasedById(req.params.id);
+    if (!d) return res.status(404).json({ error: 'Not found' });
+    return res.json(d);
+  } catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.post('/deceased', requireAdmin, async (req, res) => {
+  try { return res.status(201).json(await createDeceased({ id: id(), ...req.body })); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.put('/deceased/:id', requireAdmin, async (req, res) => {
+  try { return res.json(await updateDeceased(req.params.id, req.body)); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.delete('/deceased/:id', requireAdmin, async (req, res) => {
+  try { await deleteDeceased(req.params.id); return res.json({ ok: true }); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+// ─── Users (read-only for admin) ──────────────────────────────────────────────
+router.get('/users', requireAdmin, async (_req, res) => {
+  try { return res.json(await listUsers()); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
 });
 
 export default router;

@@ -1,11 +1,23 @@
 import { Router } from 'express';
 import { getSql, isDBConnected } from '../db';
 import { readData, writeData } from '../store';
-import { isSupabaseConfigured, createBooking, getBookings, getBookingById, createPayment, updateBooking, getUserTokens } from '../supabase';
+import { isSupabaseConfigured, createBooking, getBookings, getBookingById, createPayment, updateBooking, getUserTokens, saveNotification } from '../supabase';
 import { shouldUseSupabase, isFileFallbackDisabled } from '../dbAdapter';
 import { id } from '../utils/id';
 import { ensureAuth, AuthRequest } from '../middleware/auth';
 const router = Router();
+
+async function notifyUser(userId: string, title: string, body: string, type: string, bookingId?: string) {
+  try {
+    await saveNotification(userId, title, body, type, bookingId);
+  } catch { /* non-critical */ }
+  try {
+    const tokens = await getUserTokens(userId);
+    if (tokens && tokens.length) {
+      await import('../notifications').then((m) => m.sendMany(tokens, title, body));
+    }
+  } catch { /* non-critical */ }
+}
 
 // Create booking (authenticated)
 router.post('/', ensureAuth, async (req: AuthRequest, res) => {
@@ -16,6 +28,7 @@ router.post('/', ensureAuth, async (req: AuthRequest, res) => {
   if (!packageId) missing.push('packageId');
   if (!date) missing.push('date');
   if (missing.length) return res.status(400).json({ error: `Missing fields: ${missing.join(', ')}` });
+  if (date && isNaN(Date.parse(date))) return res.status(400).json({ error: 'Invalid date format. Use ISO 8601.' });
   const bid = id();
   // prefer Supabase then Postgres then fallback
   if (await shouldUseSupabase()) {
@@ -31,15 +44,14 @@ router.post('/', ensureAuth, async (req: AuthRequest, res) => {
               await writeData(data);
             }
           }
-        } catch (e) {
-          console.warn('Mirroring booking to file fallback failed', e?.message || e);
+        } catch {
+          // non-critical mirror
         }
+        notifyUser(userId!, 'Booking received', `Your booking has been received and is pending review.`, 'booking_pending', row.id);
         return res.json({ booking: { id: row.id, userId: row.user_id, packageId: row.package_id, date: row.date, status: row.status, meta: row.meta } });
       }
       // if API returned null/empty, fall through to other adapters
-      console.warn('Supabase createBooking returned no row, falling back to other stores');
-    } catch (err) {
-      console.warn('Supabase createBooking failed, falling back to other stores', err?.message || err);
+    } catch {
       // fall through to Postgres or file fallback
     }
   }
@@ -48,6 +60,7 @@ router.post('/', ensureAuth, async (req: AuthRequest, res) => {
     const sql = getSql();
     await sql`INSERT INTO bookings (id, user_id, package_id, date, status, meta) VALUES (${bid}, ${userId}, ${packageId}, ${date}, 'pending', ${meta})`;
     const rows = await sql`SELECT id, user_id, package_id, date, status, meta FROM bookings WHERE id = ${bid}`;
+    notifyUser(userId!, 'Booking received', `Your booking has been received and is pending review.`, 'booking_pending', bid);
     return res.json({ booking: rows[0] });
   }
 
@@ -58,7 +71,40 @@ router.post('/', ensureAuth, async (req: AuthRequest, res) => {
   const booking = { id: bid, userId, packageId, date, status: 'pending', meta } as any;
   data.bookings.push(booking);
   await writeData(data);
+  notifyUser(userId!, 'Booking received', `Your booking has been received and is pending review.`, 'booking_pending', bid);
   return res.json({ booking });
+});
+
+// GET /bookings/me — returns bookings for the authenticated user
+router.get('/me', ensureAuth, async (req: AuthRequest, res) => {
+  const userId = req.userId;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+  if (await shouldUseSupabase()) {
+    try {
+      const rows = await getBookings(userId);
+      const mapped = rows.map((r: any) => ({
+        id: r.id,
+        service: r.meta?.serviceType || r.meta?.service || 'Booking',
+        detail: r.meta?.packageLabel || r.meta?.detail || r.package_id || '',
+        date: (r.date || '').substring(0, 10),
+        price: String(r.meta?.price || r.amount || 0),
+        status: ['paid', 'confirmed', 'pending'].includes(r.status) ? 'upcoming' : (r.status || 'upcoming'),
+        packageId: r.package_id,
+      }));
+      return res.json({ bookings: mapped });
+    } catch { /* fall through */ }
+  }
+
+  if (isDBConnected()) {
+    const sql = getSql();
+    const rows = await sql`SELECT * FROM bookings WHERE user_id = ${userId} ORDER BY created_at DESC`;
+    return res.json({ bookings: rows });
+  }
+
+  if (isFileFallbackDisabled()) return res.status(500).json({ error: 'No DB available' });
+  const data = await readData();
+  return res.json({ bookings: data.bookings.filter((b: any) => b.userId === userId) });
 });
 
 // List bookings (optionally filter by userId) — authenticated
@@ -110,20 +156,6 @@ router.post('/:id/pay', ensureAuth, async (req: AuthRequest, res) => {
   const userId = req.userId;
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-  console.log('PAY: start', { id, userId, shouldUseSupabase: await shouldUseSupabase(), isDBConnected: isDBConnected() });
-
-  // helper to notify user
-  async function notifyUser(userId: string, title: string, body: string) {
-    try {
-      const tokens = await getUserTokens(userId);
-      if (tokens && tokens.length) {
-        await import('../notifications').then((m) => m.sendMany(tokens, title, body));
-      }
-    } catch (e) {
-      console.warn('Notification failed', e);
-    }
-  }
-
   // find booking
   if (await shouldUseSupabase()) {
     try {
@@ -152,13 +184,12 @@ router.post('/:id/pay', ensureAuth, async (req: AuthRequest, res) => {
         const updated = await updateBooking(id, { status: 'paid', meta: { ...(row.meta || {}), payment_receipt: receiptObj } });
 
         // notify user
-        await notifyUser(userId, 'Payment received', `Payment of Rs.${amt} received. Receipt: ${pid}`);
+        await notifyUser(userId, 'Payment received', `Your payment of Rs.${amt} has been received. Receipt: ${pid}`, 'payment_received', id?.toString());
         return res.json({ ok: true, payment: p, booking: { id: updated.id, status: updated.status, meta: updated.meta } });
       }
       // else fall through to check Postgres or file fallback
-    } catch (err) {
-      console.warn('Supabase payment path failed, falling back to file store', err?.message || err);
-      // fall through to file fallback below
+    } catch {
+      // fall through to file fallback
     }
   }
 
@@ -174,7 +205,7 @@ router.post('/:id/pay', ensureAuth, async (req: AuthRequest, res) => {
     const amt = amount || (row.meta && row.meta.price) || 0;
     await sql`INSERT INTO payments (id, booking_id, amount, status) VALUES (${pid}, ${id}, ${amt}, 'paid')`;
     await sql`UPDATE bookings SET status = 'paid', meta = ${ { ...(row.meta || {}), payment_receipt: { id: pid, amount: amt, method: method || (bypass ? 'bypass' : 'unknown') } } } WHERE id = ${id}`;
-    await notifyUser(userId, 'Payment received', `Payment of Rs.${amt} received. Receipt: ${pid}`);
+    await notifyUser(userId, 'Payment received', `Your payment of Rs.${amt} has been received. Receipt: ${pid}`, 'payment_received', id?.toString());
     const updated = await sql`SELECT * FROM bookings WHERE id = ${id}`;
     return res.json({ ok: true, payment: { id: pid, booking_id: id, amount: amt }, booking: updated[0] });
   }
@@ -183,9 +214,7 @@ router.post('/:id/pay', ensureAuth, async (req: AuthRequest, res) => {
 
   // file fallback
   const data = await readData();
-  console.log('PAY: file fallback has', (data.bookings || []).length, 'bookings - ids:', (data.bookings || []).map(b => b.id).slice(0,10));
   const idx = data.bookings.findIndex((b) => b.id === id);
-  console.log('PAY: searching for', id, 'found index', idx);
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
   if (data.bookings[idx].userId !== userId) return res.status(403).json({ error: 'Forbidden' });
   if (data.bookings[idx].status === 'paid') return res.json({ ok: true, message: 'Already paid' });
@@ -195,8 +224,43 @@ router.post('/:id/pay', ensureAuth, async (req: AuthRequest, res) => {
   data.bookings[idx].status = 'paid';
   data.bookings[idx].meta = { ...(data.bookings[idx].meta || {}), payment_receipt: { id: pid, amount: amt, method: method || (bypass ? 'bypass' : 'unknown') } };
   await writeData(data);
-  await notifyUser(userId, 'Payment received', `Payment of Rs.${amt} received. Receipt: ${pid}`);
+  await notifyUser(userId, 'Payment received', `Your payment of Rs.${amt} has been received. Receipt: ${pid}`, 'payment_received', id?.toString());
   return res.json({ ok: true, payment: { id: pid, booking_id: id, amount: amt }, booking: data.bookings[idx] });
+});
+
+// POST /bookings/:id/cancel — cancel a booking
+router.post('/:id/cancel', ensureAuth, async (req: AuthRequest, res) => {
+  const { id } = req.params;
+  const userId = req.userId;
+
+  if (await shouldUseSupabase()) {
+    try {
+      const row = await getBookingById(id);
+      if (!row) return res.status(404).json({ error: 'Not found' });
+      if (row.user_id !== userId) return res.status(403).json({ error: 'Forbidden' });
+      const updated = await updateBooking(id, { status: 'cancelled' });
+      return res.json({ ok: true, booking: updated });
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message || 'Cancel failed' });
+    }
+  }
+
+  if (isDBConnected()) {
+    const sql = getSql();
+    const rows = await sql`SELECT * FROM bookings WHERE id = ${id}`;
+    if (!rows?.[0]) return res.status(404).json({ error: 'Not found' });
+    if (rows[0].user_id !== userId) return res.status(403).json({ error: 'Forbidden' });
+    await sql`UPDATE bookings SET status = 'cancelled' WHERE id = ${id}`;
+    return res.json({ ok: true });
+  }
+
+  if (isFileFallbackDisabled()) return res.status(500).json({ error: 'No DB available' });
+  const data = await readData();
+  const idx = data.bookings.findIndex((b: any) => b.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+  data.bookings[idx].status = 'cancelled';
+  await writeData(data);
+  return res.json({ ok: true });
 });
 
 export default router;

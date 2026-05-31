@@ -15,13 +15,13 @@ router.get('/:id', ensureAuth, async (req: AuthRequest, res) => {
   if (shouldUseSupabase()) {
     const u = await getProfile(id);
     if (!u) return res.status(404).json({ error: 'Not found' });
-    return res.json({ user: { id: u.id, name: u.name, email: u.email, created_at: u.created_at } });
+    return res.json({ user: { id: u.id, name: u.name, email: u.email, phone: u.phone, address: u.address, avatar_url: u.avatar_url, created_at: u.created_at } });
   }
 
   // Try direct DB connection next
   if (isDBConnected()) {
     const sql = getSql();
-    const rows = await sql`SELECT id, name, email, created_at FROM users WHERE id = ${id}`;
+    const rows = await sql`SELECT id, name, email, phone, address, avatar_url, created_at FROM users WHERE id = ${id}`;
     if (!rows || !rows[0]) return res.status(404).json({ error: 'Not found' });
     return res.json({ user: rows[0] });
   }
@@ -30,7 +30,7 @@ router.get('/:id', ensureAuth, async (req: AuthRequest, res) => {
   if (isSupabaseConfigured()) {
     const u = await getProfile(id);
     if (!u) return res.status(404).json({ error: 'Not found' });
-    return res.json({ user: { id: u.id, name: u.name, email: u.email, created_at: u.created_at } });
+    return res.json({ user: { id: u.id, name: u.name, email: u.email, phone: u.phone, address: u.address, avatar_url: u.avatar_url, created_at: u.created_at } });
   }
 
   // File fallback
@@ -50,7 +50,7 @@ router.put('/:id', ensureAuth, async (req: AuthRequest, res) => {
   // Prefer Supabase REST when configured to do so
   if (shouldUseSupabase()) {
     const updated = await updateProfile(id, updates);
-    return res.json({ user: { id: updated.id, name: updated.name, email: updated.email } });
+    return res.json({ user: { id: updated.id, name: updated.name, email: updated.email, phone: updated.phone, address: updated.address } });
   }
 
   // Try direct DB connection next

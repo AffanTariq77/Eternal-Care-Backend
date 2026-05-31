@@ -1,4 +1,37 @@
+# dependencies
 node_modules/
+
+# build output
 dist/
+build/
+
+# environment / secrets
 .env
+.env.local
+.env.*.local
+
+# local data fallback
 data.json
+
+# logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# macOS
+.DS_Store
+
+# TypeScript
+*.tsbuildinfo
+
+# editor
+.vscode/
+.idea/
+
+# certificates / keys
+*.pem
+*.key
+*.p12
+*.cert
