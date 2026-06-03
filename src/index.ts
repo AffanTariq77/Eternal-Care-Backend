@@ -11,7 +11,6 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import path from 'path';
 import health from './routes/health';
 import auth from './routes/auth';
 import bookings from './routes/bookings';
@@ -47,9 +46,6 @@ app.use(express.json());
 // Rate limiting
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
 const paymentLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
-
-// Serve uploaded avatars as static files
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 app.use('/health', health);
 app.use('/auth', authLimiter, auth);

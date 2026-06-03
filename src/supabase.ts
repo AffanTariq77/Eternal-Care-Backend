@@ -266,6 +266,31 @@ export async function deleteDeceased(id: string) {
   if (error) throw new Error(error.message);
 }
 
+// ─── Avatar Storage ───────────────────────────────────────────────────────────
+
+const AVATAR_BUCKET = 'avatars';
+
+async function ensureAvatarBucket() {
+  const client = getClient();
+  const { data: buckets } = await client.storage.listBuckets();
+  const exists = buckets?.some((b) => b.name === AVATAR_BUCKET);
+  if (!exists) {
+    await client.storage.createBucket(AVATAR_BUCKET, { public: true });
+  }
+}
+
+export async function uploadAvatar(userId: string, buffer: Buffer, mimetype: string, ext: string): Promise<string> {
+  const client = getClient();
+  await ensureAvatarBucket();
+  const filename = `${userId}/avatar${ext}`;
+  const { error } = await client.storage
+    .from(AVATAR_BUCKET)
+    .upload(filename, buffer, { contentType: mimetype, upsert: true });
+  if (error) throw new Error(error.message);
+  const { data } = client.storage.from(AVATAR_BUCKET).getPublicUrl(filename);
+  return data.publicUrl;
+}
+
 // ─── Payments ─────────────────────────────────────────────────────────────────
 
 export async function createPayment(payment: any) {
