@@ -77,13 +77,37 @@ export async function listUsers() {
 // ─── Graveyards ───────────────────────────────────────────────────────────────
 
 export async function listGraveyards() {
-  const { data } = await getClient().from('graveyards').select('*').order('created_at', { ascending: false });
-  return data ?? [];
+  const [{ data: graveyards }, { data: plots }] = await Promise.all([
+    getClient().from('graveyards').select('*').order('created_at', { ascending: false }),
+    getClient().from('plots').select('graveyard_id, status'),
+  ]);
+
+  const countMap: Record<string, { available: number; total: number }> = {};
+  for (const p of plots ?? []) {
+    if (!countMap[p.graveyard_id]) countMap[p.graveyard_id] = { available: 0, total: 0 };
+    countMap[p.graveyard_id].total++;
+    if (p.status === 'available') countMap[p.graveyard_id].available++;
+  }
+
+  return (graveyards ?? []).map((g: any) => ({
+    ...g,
+    available_plots: countMap[g.id]?.available ?? g.available_plots ?? 0,
+    total_plots: countMap[g.id]?.total ?? g.total_plots ?? 0,
+  }));
 }
 
 export async function getGraveyardById(id: string) {
-  const { data } = await getClient().from('graveyards').select('*').eq('id', id).single();
-  return data;
+  const [{ data: g }, { data: plots }] = await Promise.all([
+    getClient().from('graveyards').select('*').eq('id', id).single(),
+    getClient().from('plots').select('status').eq('graveyard_id', id),
+  ]);
+  if (!g) return null;
+  const plotList = plots ?? [];
+  return {
+    ...g,
+    available_plots: plotList.filter((p: any) => p.status === 'available').length,
+    total_plots: plotList.length,
+  };
 }
 
 export async function createGraveyard(g: any) {
