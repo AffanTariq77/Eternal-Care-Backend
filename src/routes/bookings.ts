@@ -40,7 +40,7 @@ router.post('/', ensureAuth, async (req: AuthRequest, res) => {
           if (!isFileFallbackDisabled()) {
             const data = await readData();
             if (!data.bookings.find((b: any) => b.id === row.id)) {
-              data.bookings.push({ id: row.id, userId, packageId: row.package_id, date: row.date, status: row.status, meta: row.meta });
+              data.bookings.push({ id: row.id, userId: userId!, packageId: row.package_id!, date: row.date, status: row.status, meta: row.meta });
               await writeData(data);
             }
           }
@@ -58,7 +58,7 @@ router.post('/', ensureAuth, async (req: AuthRequest, res) => {
 
   if (isDBConnected()) {
     const sql = getSql();
-    await sql`INSERT INTO bookings (id, user_id, package_id, date, status, meta) VALUES (${bid}, ${userId}, ${packageId}, ${date}, 'pending', ${meta})`;
+    await sql`INSERT INTO bookings (id, user_id, package_id, date, status, meta) VALUES (${bid}, ${userId!}, ${packageId}, ${date}, 'pending', ${meta})`;
     const rows = await sql`SELECT id, user_id, package_id, date, status, meta FROM bookings WHERE id = ${bid}`;
     notifyUser(userId!, 'Booking received', `Your booking has been received and is pending review.`, 'booking_pending', bid);
     return res.json({ booking: rows[0] });
@@ -220,7 +220,7 @@ router.post('/:id/pay', ensureAuth, async (req: AuthRequest, res) => {
   if (data.bookings[idx].status === 'paid') return res.json({ ok: true, message: 'Already paid' });
   const pid = id?.toString() + '-pay-' + Date.now();
   const amt = amount || (data.bookings[idx].meta && data.bookings[idx].meta.price) || 0;
-  data.payments.push({ id: pid, booking_id: id, amount: amt, status: 'paid', created_at: new Date().toISOString() });
+  data.payments.push({ id: pid, bookingId: id, amount: amt, status: 'paid', created_at: new Date().toISOString() } as any);
   data.bookings[idx].status = 'paid';
   data.bookings[idx].meta = { ...(data.bookings[idx].meta || {}), payment_receipt: { id: pid, amount: amt, method: method || (bypass ? 'bypass' : 'unknown') } };
   await writeData(data);

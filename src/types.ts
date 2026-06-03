@@ -3,6 +3,7 @@ export interface User {
   name: string;
   email: string;
   password?: string; // plain for prototype only — replace with hashed in prod
+  expo_tokens?: string[];
 }
 
 export interface Booking {
@@ -10,7 +11,7 @@ export interface Booking {
   userId: string;
   packageId: string;
   date: string; // ISO
-  status: 'pending' | 'confirmed' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'cancelled' | 'paid';
   meta?: any;
 }
 
@@ -18,7 +19,7 @@ export interface Payment {
   id: string;
   bookingId: string;
   amount: number;
-  status: 'pending' | 'confirmed' | 'failed';
+  status: 'pending' | 'confirmed' | 'failed' | 'paid';
 }
 
 export interface DataShape {
