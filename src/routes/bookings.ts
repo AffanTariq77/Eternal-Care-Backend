@@ -48,6 +48,10 @@ router.post('/', ensureAuth, async (req: AuthRequest, res) => {
           // non-critical mirror
         }
         notifyUser(userId!, 'Booking received', `Your booking has been received and is pending review.`, 'booking_pending', row.id);
+        // Reserve the plot as soon as a booking is created (even before payment)
+        if (meta?.plotId) {
+          try { await updatePlot(meta.plotId, { status: 'reserved' }); } catch { /* non-critical */ }
+        }
         return res.json({ booking: { id: row.id, userId: row.user_id, packageId: row.package_id, date: row.date, status: row.status, meta: row.meta } });
       }
       // if API returned null/empty, fall through to other adapters

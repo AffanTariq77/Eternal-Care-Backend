@@ -170,6 +170,16 @@ router.put('/bookings/:id', requireAdmin, async (req, res) => {
     const existing = await getBookingById(req.params.id);
     const updated = await updateBooking(req.params.id, req.body);
     const newStatus: string | undefined = req.body.status;
+
+    // Update the plot status based on the new booking status
+    if (newStatus && existing?.meta?.plotId) {
+      const plotStatus =
+        newStatus === 'completed'  ? 'occupied'  :
+        newStatus === 'cancelled'  ? 'available' :
+        /* pending/paid/confirmed */ 'reserved';
+      try { await updatePlot(existing.meta.plotId, { status: plotStatus }); } catch { /* non-critical */ }
+    }
+
     if (newStatus && existing && newStatus !== existing.status) {
       const userId: string = existing.user_id;
       const MESSAGES: Record<string, { title: string; body: string; type: string }> = {
