@@ -168,8 +168,18 @@ router.get('/bookings/:id', requireAdmin, async (req, res) => {
 router.put('/bookings/:id', requireAdmin, async (req, res) => {
   try {
     const existing = await getBookingById(req.params.id);
-    const updated = await updateBooking(req.params.id, req.body);
-    const newStatus: string | undefined = req.body.status;
+
+    // 'completed' is not in the Supabase bookings_status_check constraint.
+    // Work around it: keep status='confirmed' but stamp meta.completed_at so
+    // the UI can distinguish "confirmed-and-completed" from just "confirmed".
+    let patch = { ...req.body };
+    if (patch.status === 'completed') {
+      patch.status = 'confirmed';
+      patch.meta = { ...(existing?.meta || {}), completed_at: new Date().toISOString() };
+    }
+
+    const updated = await updateBooking(req.params.id, patch);
+    const newStatus: string | undefined = req.body.status; // use original intent for notifications/plot
 
     // Update the plot status based on the new booking status
     if (newStatus && existing?.meta?.plotId) {
