@@ -131,6 +131,27 @@ router.get('/', ensureAuth, async (req: AuthRequest, res) => {
   return res.json({ bookings: list });
 });
 
+// GET /bookings/slots?providerId=&date= — must be before /:id to avoid being matched as id
+router.get('/slots', async (req, res) => {
+  const { providerId, date } = req.query as any;
+  if (!providerId || !date) return res.json([]);
+  try {
+    if (await shouldUseSupabase()) {
+      const all = await getBookings();
+      const booked = (all as any[])
+        .filter((b) =>
+          b.meta?.providerId === providerId &&
+          (b.date || '').startsWith(date) &&
+          b.status !== 'cancelled'
+        )
+        .map((b) => b.meta?.selectedTime)
+        .filter(Boolean);
+      return res.json(booked);
+    }
+  } catch { /* fall through */ }
+  return res.json([]);
+});
+
 router.get('/:id', ensureAuth, async (req: AuthRequest, res) => {
   const { id } = req.params;
   if (isDBConnected()) {
@@ -234,27 +255,6 @@ router.post('/:id/pay', ensureAuth, async (req: AuthRequest, res) => {
   await writeData(data);
   await notifyUser(userId, 'Payment received', `Your payment of Rs.${amt} has been received. Receipt: ${pid}`, 'payment_received', id?.toString());
   return res.json({ ok: true, payment: { id: pid, booking_id: id, amount: amt }, booking: data.bookings[idx] });
-});
-
-// GET /bookings/slots?providerId=&date= — returns booked time strings for a provider on a date
-router.get('/slots', async (req, res) => {
-  const { providerId, date } = req.query as any;
-  if (!providerId || !date) return res.json([]);
-  try {
-    if (await shouldUseSupabase()) {
-      const all = await getBookings();
-      const booked = (all as any[])
-        .filter((b) =>
-          b.meta?.providerId === providerId &&
-          (b.date || '').startsWith(date) &&
-          b.status !== 'cancelled'
-        )
-        .map((b) => b.meta?.selectedTime)
-        .filter(Boolean);
-      return res.json(booked);
-    }
-  } catch { /* fall through */ }
-  return res.json([]);
 });
 
 // POST /bookings/:id/cancel — cancel a booking
