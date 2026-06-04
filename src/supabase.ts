@@ -197,9 +197,12 @@ export async function deleteProvider(id: string) {
 // ─── Bookings ─────────────────────────────────────────────────────────────────
 
 export async function getBookings(userId?: string) {
+  // Use select('*') only — graveyards/plots/service_providers have no FK columns on
+  // bookings so PostgREST returns an error for those joins, silently giving back null.
+  // All user-facing data (name, service, etc.) is already in the meta JSON column.
   let query = getClient()
     .from('bookings')
-    .select('*, users(name, email), graveyards(name), plots(plot_code), service_providers(name)')
+    .select('*')
     .order('created_at', { ascending: false });
   if (userId) query = query.eq('user_id', userId);
   const { data } = await query;
@@ -209,7 +212,7 @@ export async function getBookings(userId?: string) {
 export async function getBookingById(id: string) {
   const { data } = await getClient()
     .from('bookings')
-    .select('*, users(name, email), graveyards(name), plots(plot_code), service_providers(name)')
+    .select('*')
     .eq('id', id).single();
   return data;
 }
