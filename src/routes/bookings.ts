@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getSql, isDBConnected } from '../db';
 import { readData, writeData } from '../store';
-import { isSupabaseConfigured, createBooking, getBookings, getBookingById, createPayment, updateBooking, getUserTokens, saveNotification } from '../supabase';
+import { isSupabaseConfigured, createBooking, getBookings, getBookingById, createPayment, updateBooking, updatePlot, getUserTokens, saveNotification } from '../supabase';
 import { shouldUseSupabase, isFileFallbackDisabled } from '../dbAdapter';
 import { id } from '../utils/id';
 import { ensureAuth, AuthRequest } from '../middleware/auth';
@@ -91,6 +91,8 @@ router.get('/me', ensureAuth, async (req: AuthRequest, res) => {
         price: String(r.meta?.price || r.amount || 0),
         status: ['paid', 'confirmed', 'pending'].includes(r.status) ? 'upcoming' : (r.status || 'upcoming'),
         packageId: r.package_id,
+        meta: r.meta || {},
+        created_at: r.created_at,
       }));
       return res.json({ bookings: mapped });
     } catch { /* fall through */ }
@@ -181,7 +183,13 @@ router.post('/:id/pay', ensureAuth, async (req: AuthRequest, res) => {
         const p = await createPayment(paymentPayload);
         // mark booking paid and attach receipt in meta
         const receiptObj = { id: pid, amount: amt, method: method || (bypass ? 'bypass' : 'unknown'), note: receipt || null, ts: new Date().toISOString() };
-        const updated = await updateBooking(id, { status: 'paid', meta: { ...(row.meta || {}), payment_receipt: receiptObj } });
+        const newMeta = { ...(row.meta || {}), payment_receipt: receiptObj };
+        const updated = await updateBooking(id, { status: 'paid', meta: newMeta });
+
+        // Reserve the plot if one was booked
+        if (newMeta.plotId) {
+          try { await updatePlot(newMeta.plotId, { status: 'reserved' }); } catch { /* non-critical */ }
+        }
 
         // notify user
         await notifyUser(userId, 'Payment received', `Your payment of Rs.${amt} has been received. Receipt: ${pid}`, 'payment_received', id?.toString());
@@ -226,6 +234,27 @@ router.post('/:id/pay', ensureAuth, async (req: AuthRequest, res) => {
   await writeData(data);
   await notifyUser(userId, 'Payment received', `Your payment of Rs.${amt} has been received. Receipt: ${pid}`, 'payment_received', id?.toString());
   return res.json({ ok: true, payment: { id: pid, booking_id: id, amount: amt }, booking: data.bookings[idx] });
+});
+
+// GET /bookings/slots?providerId=&date= — returns booked time strings for a provider on a date
+router.get('/slots', async (req, res) => {
+  const { providerId, date } = req.query as any;
+  if (!providerId || !date) return res.json([]);
+  try {
+    if (await shouldUseSupabase()) {
+      const all = await getBookings();
+      const booked = (all as any[])
+        .filter((b) =>
+          b.meta?.providerId === providerId &&
+          (b.date || '').startsWith(date) &&
+          b.status !== 'cancelled'
+        )
+        .map((b) => b.meta?.selectedTime)
+        .filter(Boolean);
+      return res.json(booked);
+    }
+  } catch { /* fall through */ }
+  return res.json([]);
 });
 
 // POST /bookings/:id/cancel — cancel a booking
