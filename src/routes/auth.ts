@@ -36,7 +36,7 @@ router.post('/signup', async (req, res) => {
           }
         } catch { /* non-critical */ }
       }
-      return res.json({ user: { id: uid, name: name.trim(), email, role }, token });
+      return res.json({ user: { id: uid, name: name.trim(), email, role, avatar_url: null }, token });
     } catch (e: any) {
       return res.status(500).json({ error: e?.message || 'Signup failed' });
     }
@@ -89,7 +89,7 @@ router.post('/login', async (req, res) => {
           }
         } catch { /* non-critical */ }
       }
-      return res.json({ user: { id: user.id, name: user.name, email: user.email, role }, token });
+      return res.json({ user: { id: user.id, name: user.name, email: user.email, role, avatar_url: user.avatar_url || null }, token });
     } catch (e: any) {
       return res.status(500).json({ error: e?.message || 'Login failed' });
     }

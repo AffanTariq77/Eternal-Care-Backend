@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
+import multer from 'multer';
+import path from 'path';
 import { id } from '../utils/id';
 import { getJwtSecret } from '../middleware/auth';
 import {
@@ -9,8 +11,17 @@ import {
   getBookings, getBookingById, updateBooking, deleteBooking,
   countTodayBookings, countPendingBookings, revenueThisMonth,
   listDeceased, getDeceasedById, createDeceased, updateDeceased, deleteDeceased,
-  listUsers, getUserTokens, saveNotification,
+  listUsers, getUserTokens, saveNotification, uploadProviderImage,
 } from '../supabase';
+
+const providerUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Images only'));
+  },
+});
 
 const router = Router();
 
@@ -126,6 +137,18 @@ router.put('/providers/:id', requireAdmin, async (req, res) => {
 router.delete('/providers/:id', requireAdmin, async (req, res) => {
   try { await deleteProvider(req.params.id); return res.json({ ok: true }); }
   catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.post('/providers/:id/image', requireAdmin, providerUpload.single('image'), async (req: any, res: any) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const ext = path.extname(req.file.originalname) || '.jpg';
+  try {
+    const imageUrl = await uploadProviderImage(req.params.id, req.file.buffer, req.file.mimetype, ext);
+    await updateProvider(req.params.id, { image_url: imageUrl });
+    return res.json({ imageUrl });
+  } catch (e: any) {
+    return res.status(500).json({ error: e?.message || 'Failed to upload image' });
+  }
 });
 
 // ─── Bookings ─────────────────────────────────────────────────────────────────

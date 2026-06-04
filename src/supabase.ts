@@ -315,6 +315,23 @@ export async function uploadAvatar(userId: string, buffer: Buffer, mimetype: str
   return data.publicUrl;
 }
 
+const PROVIDER_IMAGE_BUCKET = 'provider-images';
+
+export async function uploadProviderImage(providerId: string, buffer: Buffer, mimetype: string, ext: string): Promise<string> {
+  const client = getClient();
+  const { data: buckets } = await client.storage.listBuckets();
+  if (!buckets?.some((b) => b.name === PROVIDER_IMAGE_BUCKET)) {
+    await client.storage.createBucket(PROVIDER_IMAGE_BUCKET, { public: true });
+  }
+  const filename = `${providerId}/image${ext}`;
+  const { error } = await client.storage
+    .from(PROVIDER_IMAGE_BUCKET)
+    .upload(filename, buffer, { contentType: mimetype, upsert: true });
+  if (error) throw new Error(error.message);
+  const { data } = client.storage.from(PROVIDER_IMAGE_BUCKET).getPublicUrl(filename);
+  return data.publicUrl;
+}
+
 // ─── Payments ─────────────────────────────────────────────────────────────────
 
 export async function createPayment(payment: any) {
