@@ -241,10 +241,13 @@ export async function countTodayBookings() {
 }
 
 export async function countPendingBookings() {
+  const since = new Date();
+  since.setDate(since.getDate() - 30);
   const { count } = await getClient()
     .from('bookings')
     .select('*', { count: 'exact', head: true })
-    .eq('status', 'pending');
+    .eq('status', 'pending')
+    .gte('created_at', since.toISOString());
   return count ?? 0;
 }
 
@@ -252,11 +255,11 @@ export async function revenueThisMonth() {
   const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
   const { data } = await getClient()
     .from('bookings')
-    .select('amount')
+    .select('amount, meta')
     .gte('created_at', start.toISOString())
-    .in('status', ['confirmed', 'completed']);
+    .in('status', ['paid', 'confirmed', 'completed']);
   if (!data) return 0;
-  return data.reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
+  return data.reduce((s: number, r: any) => s + (Number(r.meta?.price || r.amount) || 0), 0);
 }
 
 // ─── Deceased Records ─────────────────────────────────────────────────────────
