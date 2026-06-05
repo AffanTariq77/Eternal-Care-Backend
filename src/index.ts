@@ -21,6 +21,7 @@ import avatar from './routes/avatar';
 import graveyards from './routes/graveyards';
 import providers from './routes/providers';
 import notifications from './routes/notifications';
+import support from './routes/support';
 import { initDB } from './db';
 import { isSupabaseConfigured } from './supabase';
 
@@ -57,6 +58,7 @@ app.use('/avatar', avatar);
 app.use('/graveyards', graveyards);
 app.use('/service-providers', providers);
 app.use('/notifications', notifications);
+app.use('/support', support);
 
 // Global error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

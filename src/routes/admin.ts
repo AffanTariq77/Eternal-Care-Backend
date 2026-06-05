@@ -12,6 +12,7 @@ import {
   countTodayBookings, countPendingBookings, revenueThisMonth,
   listDeceased, getDeceasedById, createDeceased, updateDeceased, deleteDeceased,
   listUsers, getUserTokens, saveNotification, uploadProviderImage,
+  listSupportQueries, resolveSupportQuery,
 } from '../supabase';
 
 const providerUpload = multer({
@@ -248,6 +249,17 @@ router.delete('/deceased/:id', requireAdmin, async (req, res) => {
 // ─── Users (read-only for admin) ──────────────────────────────────────────────
 router.get('/users', requireAdmin, async (_req, res) => {
   try { return res.json(await listUsers()); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+// ─── Support Queries ──────────────────────────────────────────────────────────
+router.get('/support', requireAdmin, async (_req, res) => {
+  try { return res.json(await listSupportQueries()); }
+  catch (e: any) { return res.status(500).json({ error: e?.message }); }
+});
+
+router.patch('/support/:id', requireAdmin, async (req, res) => {
+  try { return res.json(await resolveSupportQuery(req.params.id)); }
   catch (e: any) { return res.status(500).json({ error: e?.message }); }
 });
 

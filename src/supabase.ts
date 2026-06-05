@@ -377,3 +377,30 @@ export async function saveNotification(userId: string, title: string, body: stri
     read: false,
   });
 }
+
+// ─── Support Queries ──────────────────────────────────────────────────────────
+
+export async function createSupportQuery(q: { name: string; email: string; message: string }) {
+  const { data, error } = await getClient().from('support_queries').insert(q).select().single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function listSupportQueries() {
+  const { data } = await getClient()
+    .from('support_queries')
+    .select('*')
+    .order('created_at', { ascending: false });
+  return data ?? [];
+}
+
+export async function resolveSupportQuery(id: string) {
+  const { data, error } = await getClient()
+    .from('support_queries')
+    .update({ status: 'resolved' })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
